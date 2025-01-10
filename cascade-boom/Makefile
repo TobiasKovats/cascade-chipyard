@@ -8,11 +8,12 @@ DESIGN_NAME = boom
 VARIANT_ID = _boom
 
 REPLACE_BOOTROM ?= 0
-
+VCD_REGEX = tb_top/i_dut/*
 TOP_MODULE = boom_mem_top # Top module for the Yosys instrumentation.
 
-DESIGN_CONFIG = MyMediumBoomConfigTracing
+# DESIGN_CONFIG = MySmallBoomConfigNoTracing
+DESIGN_CONFIG = MyMediumBoomConfigNoTracing
 
-CASCADE_DIR := ${shell dirname ${shell pwd}}/cascade-boom
+MILESAN_DIR := ${shell dirname ${shell pwd}}/milesan-boom
 
-include ../cascade-common/cascade-common.mk
+include ../common/common.mk

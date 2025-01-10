@@ -66,6 +66,13 @@ module tb_top();
         .mem_rdata_o(mem_rdata)
     );
 
+    initial begin: application_block
+        wait (rst_n);
+
+        @(posedge clk);
+        #(APPL_DELAY);
+    end
+
     initial begin: acquisition_block
         bit got_stop_req, got_pc_dontcare;
         int remaining_before_stop;
@@ -136,7 +143,7 @@ module tb_top();
                     !got_pc_dontcare &&
                     $isunknown(i_dut.i_mem_top.i_chip_top.system.tile_prci_domain.tile_reset_domain.boom_tile.frontend.s2_ppc)) begin
                 $display("PC has become X! Stopping the benchmark after ", remaining_before_stop, " more ticks.");
-                got_stop_req = 1;
+                // got_stop_req = 1;
                 got_pc_dontcare = 1;
             end
 
