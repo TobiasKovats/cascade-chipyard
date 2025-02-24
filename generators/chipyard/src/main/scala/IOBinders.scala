@@ -24,6 +24,8 @@ import tracegen.{HasTraceGenTilesModuleImp}
 
 import scala.reflect.{ClassTag}
 
+import specdoctor.CanHaveSpecDoctorModuleImp
+
 // System for instantiating binders based
 // on the scala type of the Target (_not_ its IO). This avoids needing to
 // duplicate harnesses (essentially test harnesses) for each target.
@@ -404,5 +406,29 @@ class WithSimDromajoBridge extends ComposeIOBinder({
    }
 })
 
+class WithSpecDoctor extends OverrideIOBinder({
+  (system: CanHaveSpecDoctorModuleImp) => system.spdoc.map({
+    spdoc =>
+      val (checkPort, ioCells1) = IOCell.generateIOFromSignal(spdoc.check, Some("iocell_spdoc_check"))
+      val (donePort, ioCells2) = IOCell.generateIOFromSignal(spdoc.done, Some("iocell_spdoc_done"))
+      checkPort.suggestName("io_spdoc_check")
+      donePort.suggestName("io_spdoc_done")
+      val harnessFn = (th: chipyard.TestHarness) => {
+        checkPort := th.spdoc_check;
+        th.spdoc_done := donePort
+        Nil
+      }
+      Seq((Seq(checkPort, donePort), ioCells1 ++ ioCells2, Some(harnessFn)))
+  }).getOrElse(Nil)
+})
+
+class WithExtInterrupt extends OverrideIOBinder({
+  (system: HasExtInterruptsModuleImp) => {
+    val (port, ioCells) = IOCell.generateIOFromSignal(system.interrupts, Some("iocell_interrupts"))
+    port.suggestName("interrupts")
+    val harnessFn = (th: chipyard.TestHarness) => { port := th.interrupt; Nil }
+    Seq((Seq(port), ioCells, Some(harnessFn)))
+  }
+})
 
 } /* end package object */

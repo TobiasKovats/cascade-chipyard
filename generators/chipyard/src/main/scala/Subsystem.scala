@@ -26,10 +26,13 @@ import ariane.{ArianeTile, ArianeTilesKey, ArianeCrossingKey, ArianeTileParams}
 
 import testchipip.{DromajoHelper}
 
+import specdoctor.{CanHaveSpecDoctor, CanHaveSpecDoctorModuleImp}
+
 trait HasChipyardTiles extends HasTiles
   with CanHavePeripheryPLIC
   with CanHavePeripheryCLINT
   with HasPeripheryDebug
+  with CanHaveSpecDoctor
 { this: BaseSubsystem =>
 
   val module: HasChipyardTilesModuleImp
@@ -83,6 +86,7 @@ trait HasChipyardTiles extends HasTiles
 
 trait HasChipyardTilesModuleImp extends HasTilesModuleImp
   with HasPeripheryDebugModuleImp
+  with CanHaveSpecDoctorModuleImp
 {
   val outer: HasChipyardTiles
 }

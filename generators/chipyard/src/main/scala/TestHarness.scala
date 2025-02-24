@@ -20,6 +20,9 @@ trait HasTestHarnessFunctions {
 class TestHarness(implicit val p: Parameters) extends Module {
   val io = IO(new Bundle {
     val success = Output(Bool())
+    val spdoc_check = Input(Bool())
+    val spdoc_done = Output(Bool())
+    val interrupt = Input(Bool())
   })
 
   val dut = p(BuildTop)(p)
@@ -33,5 +36,10 @@ class TestHarness(implicit val p: Parameters) extends Module {
   def success = io.success
   def harnessReset = this.reset.asBool
 
+  /* NOTE SpecDoctor Logic */
+  def spdoc_check = io.spdoc_check
+  def spdoc_done = io.spdoc_done
+  def interrupt = io.interrupt
+  dontTouch(io.spdoc_check)
 }
 

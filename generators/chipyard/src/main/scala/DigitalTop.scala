@@ -26,6 +26,7 @@ class DigitalTop(implicit p: Parameters) extends System
   with chipyard.example.CanHavePeripheryStreamingFIR // Enables optionally adding the DSPTools FIR example widget
   with chipyard.example.CanHavePeripheryStreamingPassthrough // Enables optionally adding the DSPTools streaming-passthrough example widget
   with nvidia.blocks.dla.CanHavePeripheryNVDLA // Enables optionally having an NVDLA
+  with specdoctor.CanHaveSpecDoctor
 {
   override lazy val module = new DigitalTopModule(this)
 }
@@ -40,4 +41,5 @@ class DigitalTopModule[+L <: DigitalTop](l: L) extends SystemModule(l)
   with icenet.CanHavePeripheryIceNICModuleImp
   with chipyard.example.CanHavePeripheryGCDModuleImp
   with freechips.rocketchip.util.DontTouch
+  with specdoctor.CanHaveSpecDoctorModuleImp
 // DOC include end: DigitalTop

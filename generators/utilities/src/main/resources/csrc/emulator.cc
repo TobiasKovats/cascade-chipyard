@@ -77,6 +77,7 @@ EMULATOR OPTIONS\n\
                            automatically.\n\
   -V, --verbose            Enable all Chisel printfs (cycle-by-cycle info)\n\
        +verbose\n\
+  -t, --timing             Enable SpecDoctor cycle measurement\n\
 ", stdout);
 #if VM_TRACE == 0
   fputs("\
@@ -124,6 +125,7 @@ int main(int argc, char** argv)
 #endif
   char ** htif_argv = NULL;
   int verilog_plusargs_legal = 1;
+  bool timing = false;
 
   dramsim = 0;
   opterr = 1;
@@ -139,6 +141,7 @@ int main(int argc, char** argv)
       {"dramsim",         no_argument,       0, 'D' },
       {"permissive",      no_argument,       0, 'p' },
       {"permissive-off",  no_argument,       0, 'o' },
+      {"timing",          no_argument,       0, 't' },
 #if VM_TRACE
       {"vcd",             required_argument, 0, 'v' },
       {"dump-start",      required_argument, 0, 'x' },
@@ -147,9 +150,9 @@ int main(int argc, char** argv)
     };
     int option_index = 0;
 #if VM_TRACE
-    int c = getopt_long(argc, argv, "-chm:s:r:v:Vx:Dpo", long_options, &option_index);
+    int c = getopt_long(argc, argv, "-chm:s:r:v:Vx:Dpot", long_options, &option_index);
 #else
-    int c = getopt_long(argc, argv, "-chm:s:r:VDpo", long_options, &option_index);
+    int c = getopt_long(argc, argv, "-chm:s:r:VDpot", long_options, &option_index);
 #endif
     if (c == -1) break;
  retry:
@@ -165,6 +168,7 @@ int main(int argc, char** argv)
       case 'D': dramsim = 1;                break;
       case 'p': opterr = 0;                 break;
       case 'o': opterr = 1;                 break;
+      case 't': timing = true;              break;
 #if VM_TRACE
       case 'v': {
         vcdfile = strcmp(optarg, "-") == 0 ? stdout : fopen(optarg, "w");
@@ -298,6 +302,9 @@ done_processing:
   // start reset off low so a rising edge triggers async reset
   tile->reset = 0;
   tile->clock = 0;
+  tile->io_spdoc_check = 0;
+  tile->io_interrupt = 0;
+
   tile->eval();
   // reset for several cycles to handle pipelined reset
   for (int i = 0; i < 100; i++) {
@@ -320,8 +327,18 @@ done_processing:
   tile->reset = 0;
   done_reset = true;
 
+  uint64_t spdoc_cycle = 0;
   while (!dtm->done() && !jtag->done() && !tsi->done() &&
          !tile->io_success && trace_count < max_cycles) {
+
+    if (tile->io_spdoc_done) {
+      if (!timing) break;
+      else tile->io_interrupt = 1;
+    } 
+
+    if (tsi->spdoc_check())
+      tile->io_spdoc_check = 1;
+
     tile->clock = 0;
     tile->eval();
 #if VM_TRACE
@@ -339,12 +356,37 @@ done_processing:
     trace_count++;
   }
 
+  int i = 0;
+  while (i < 100 && timing) {
+    spdoc_cycle = tsi->spdoc_cycle();
+
+    tile->clock = 0;
+    tile->eval();
+#if VM_TRACE
+    dump = tfp && trace_count >= start;
+    if (dump)
+      tfp->dump(static_cast<vluint64_t>(trace_count * 2));
+#endif
+
+    tile->clock = 1;
+    tile->eval();
+#if VM_TRACE
+    if (dump)
+      tfp->dump(static_cast<vluint64_t>(trace_count * 2 + 1));
+#endif
+    trace_count++;
+    i++;
+  }
+
 #if VM_TRACE
   if (tfp)
     tfp->close();
   if (vcdfile)
     fclose(vcdfile);
 #endif
+
+  if (timing)
+    fprintf(stderr, "[SpecDoctor] Cycle: %ld\n", spdoc_cycle);
 
   if (dtm->exit_code())
   {

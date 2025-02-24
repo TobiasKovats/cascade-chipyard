@@ -26,13 +26,15 @@ sim_name = verilator
 #########################################################################################
 sim_prefix = simulator
 sim = $(sim_dir)/$(sim_prefix)-$(MODEL_PACKAGE)-$(CONFIG)
+sim_cov = $(sim_dir)/$(sim_prefix)-$(MODEL_PACKAGE)-$(CONFIG)-cov
 sim_debug = $(sim_dir)/$(sim_prefix)-$(MODEL_PACKAGE)-$(CONFIG)-debug
-
+PYTHON ?= python3
 WAVEFORM_FLAG=-v$(sim_out_name).vcd
 
 .PHONY: default debug
 default: $(sim)
 debug: $(sim_debug)
+cov : $(sim_cov)
 
 #########################################################################################
 # import other necessary rules and variables
@@ -43,10 +45,11 @@ include $(base_dir)/common.mk
 # verilator binary and flags
 #########################################################################################
 VERILATOR := verilator --cc --exe
+RISCV_R := $(base_dir)/riscv-tools-install
 
 CXXFLAGS := \
 	$(CXXFLAGS) -O1 -std=c++11 \
-	-I$(RISCV)/include \
+	-I$(RISCV_R)/include \
 	-I$(dramsim_dir) \
 	-D__STDC_FORMAT_MACROS \
 	$(EXTRA_SIM_CC_FLAGS)
@@ -61,7 +64,7 @@ VERILATOR_CC_OPTS = \
 	-CFLAGS "$(CXXFLAGS) -DTEST_HARNESS=V$(VLOG_MODEL) -DVERILATOR" \
 	-CFLAGS "-I$(build_dir) -include $(build_dir)/$(long_name).plusArgs -include $(build_dir)/verilator.h" \
 	-LDFLAGS "$(LDFLAGS)" \
-	$(RISCV)/lib/libfesvr.a \
+	$(RISCV_R)/lib/libfesvr.a \
 	$(dramsim_lib)
 
 # default flags added for ariane
@@ -88,6 +91,7 @@ VERILATOR_NONCC_OPTS = \
 	$(TIMESCALE_OPTS) \
 	--top-module $(VLOG_MODEL) \
 	-Wno-fatal \
+	-Wno-TIMESCALEMOD \
 	$(shell if ! grep -iq "module.*ariane" $(build_dir)/*.*v; then echo "$(CHIPYARD_VERILATOR_FLAGS)"; else echo "$(ARIANE_VERILATOR_FLAGS)"; fi) \
 	--output-split 10000 \
 	--output-split-cfuncs 100 \
@@ -100,18 +104,21 @@ VERILATOR_DEFINES = \
 	+define+STOP_COND=\$$c\(\"done_reset\"\)
 
 VERILATOR_OPTS = $(VERILATOR_CC_OPTS) $(VERILATOR_NONCC_OPTS) $(VERILATOR_DEFINES) $(EXTRA_SIM_SOURCES)
-
+VERILATOR_OPTS_COV = $(filter-out %.top.v, $(filter-out %.harness.v, $(VERILATOR_OPTS))) $(top_and_harness_cov_reduced)
 #########################################################################################
 # verilator build paths and file names
 #########################################################################################
 model_dir = $(build_dir)/$(long_name)
 model_dir_debug = $(build_dir)/$(long_name).debug
+model_dir_cov = $(build_dir)/$(long_name).cov
 
 model_header = $(model_dir)/V$(VLOG_MODEL).h
 model_header_debug = $(model_dir_debug)/V$(VLOG_MODEL).h
+model_header_cov = $(model_dir_cov)/V$(VLOG_MODEL).h
 
 model_mk = $(model_dir)/V$(VLOG_MODEL).mk
 model_mk_debug = $(model_dir_debug)/V$(VLOG_MODEL).mk
+model_mk_cov = $(model_dir_cov)/V$(VLOG_MODEL).mk
 
 #########################################################################################
 # build makefile fragment that builds the verilator sim rules
@@ -128,6 +135,32 @@ $(model_mk_debug): $(sim_vsrcs) $(sim_common_files) $(EXTRA_SIM_REQS)
 	$(VERILATOR) $(VERILATOR_OPTS) -o $(sim_debug) --trace -Mdir $(model_dir_debug) -CFLAGS "-include $(model_header_debug)"
 	touch $@
 
+chiptop = $(filter %.top.v, $(sim_vsrcs))
+harness =  $(filter %.harness.v, $(sim_vsrcs))
+src_no_top_and_harness = $(filter-out $(top_and_harness),$(sim_vsrcs))
+
+top_and_harness_cov = $(model_dir_cov).top_and_harness.v
+top_and_harness_cov_reduced = $(model_dir_cov).top_and_harness.reduced.v
+
+$(top_and_harness_cov): $(chiptop) $(harness) coverage.tcl
+	CHIPTOP_INPUT=$(chiptop) HARNESS_INPUT=$(harness)  VERILOG_OUTPUT=$@ TOP_MODULE=TestHarness yosys -c coverage.tcl
+	
+$(top_and_harness_cov_reduced): $(top_and_harness_cov)
+	mkdir -p generated
+	$(PYTHON) $(CASCADE_PYTHON_COMMON)/expand_left_operand.py $< generated/interm.sv
+	$(PYTHON) $(CASCADE_PYTHON_COMMON)/expand_right_operand.py generated/interm.sv generated/interm.sv
+	$(PYTHON) $(CASCADE_PYTHON_COMMON)/compress_concats.py generated/interm.sv generated/interm.sv
+	$(PYTHON) $(CASCADE_PYTHON_COMMON)/divide_concat_into_subconcats.py generated/interm.sv $@
+
+$(model_mk_cov): $(top_and_harness_cov_reduced) $(src_no_top_and_harness) $(sim_common_files) $(EXTRA_SIM_REQS)
+	rm -rf $(model_dir_cov)
+	mkdir -p $(model_dir_cov)
+	$(VERILATOR)  $(VERILATOR_OPTS_COV) -DCOV_EN -o $(sim_cov) --trace -Mdir $(model_dir_cov) -CFLAGS "-include $(model_header_cov)"
+	touch $@
+
+test:
+	echo $(top_and_harness)
+
 #########################################################################################
 # invoke make to make verilator sim rules
 #########################################################################################
@@ -136,6 +169,9 @@ $(sim): $(model_mk) $(dramsim_lib)
 
 $(sim_debug): $(model_mk_debug) $(dramsim_lib)
 	$(MAKE) VM_PARALLEL_BUILDS=1 -C $(model_dir_debug) -f V$(VLOG_MODEL).mk
+
+$(sim_cov): $(model_mk_cov) $(dramsim_lib)
+	$(MAKE) VM_PARALLEL_BUILDS=1 -C $(model_dir_cov) -f V$(VLOG_MODEL).mk
 
 #########################################################################################
 # create a verilator vpd rule

@@ -25,6 +25,27 @@ class SmallBoomConfig extends Config(
   new freechips.rocketchip.subsystem.WithCoherentBusTopology ++  // hierarchical buses including mbus+l2
   new freechips.rocketchip.system.BaseConfig)                    // "base" rocketchip system
 
+class SpecDoctorBoomConfig extends Config(
+  new chipyard.iobinders.WithUARTAdapter ++
+    new chipyard.iobinders.WithExtInterrupt ++
+    new chipyard.iobinders.WithBlackBoxSimMem ++
+    new chipyard.iobinders.WithTiedOffDebug ++
+    new chipyard.iobinders.WithSimSerial ++
+    new chipyard.iobinders.WithSpecDoctor ++
+    new testchipip.WithTSI ++
+    new chipyard.config.WithBootROM ++
+    new chipyard.config.WithUART ++
+    new chipyard.config.WithL2TLBs(1024) ++
+    new freechips.rocketchip.subsystem.WithNoMMIOPort ++
+    new freechips.rocketchip.subsystem.WithNoSlavePort ++
+    new freechips.rocketchip.subsystem.WithInclusiveCache ++
+    new freechips.rocketchip.subsystem.WithNExtTopInterrupts(1) ++
+    new specdoctor.WithSpecDoctor ++
+    new boom.common.WithSmallBooms ++
+    new boom.common.WithNBoomCores(1) ++
+    new freechips.rocketchip.subsystem.WithCoherentBusTopology ++
+    new freechips.rocketchip.system.BaseConfig)
+
 class MediumBoomConfig extends Config(
   new chipyard.iobinders.WithUARTAdapter ++
   new chipyard.iobinders.WithTieOffInterrupts ++
