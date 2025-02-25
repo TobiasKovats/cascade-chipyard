@@ -37,6 +37,7 @@ extern dtm_t* dtm;
 extern remote_bitbang_t * jtag;
 extern int dramsim;
 
+uint32_t auto_cover_out[N_COV_WORDS] = {0};
 static uint64_t trace_count = 0;
 bool verbose = false;
 bool done_reset = false;
@@ -117,12 +118,14 @@ int main(int argc, char** argv)
   uint64_t max_cycles = -1;
   int ret = 0;
   bool print_cycles = false;
+  
   // Port numbers are 16 bit unsigned integers. 
   uint16_t rbb_port = 0;
 #if VM_TRACE
   FILE * vcdfile = NULL;
   uint64_t start = 0;
 #endif
+
   char ** htif_argv = NULL;
   int verilog_plusargs_legal = 1;
   bool timing = false;
@@ -349,6 +352,9 @@ done_processing:
 
     tile->clock = 1;
     tile->eval();
+    for(int i=0; i<N_COV_WORDS; i++){
+      auto_cover_out[i] |= tile->auto_cover_out[i];
+    }
 #if VM_TRACE
     if (dump)
       tfp->dump(static_cast<vluint64_t>(trace_count * 2 + 1));
@@ -412,6 +418,16 @@ done_processing:
   {
     fprintf(stderr, "*** PASSED *** Completed after %ld cycles\n", trace_count);
   }
+
+#ifdef COV_EN
+  std::string coverage_path = std::getenv("COV_PATH");
+  FILE *fp = fopen(coverage_path.c_str(),"w");
+  std::cout << "N_COV_WORDS: " << N_COV_WORDS << std::endl;
+  for(int i=0; i<N_COV_WORDS; i++){
+    fprintf(fp,"%x",auto_cover_out[i]);
+  }
+  fclose(fp);
+#endif
 
   if (dtm) delete dtm;
   if (tsi) delete tsi;
