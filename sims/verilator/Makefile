@@ -30,6 +30,7 @@ sim_cov = $(sim_dir)/$(sim_prefix)-$(MODEL_PACKAGE)-$(CONFIG)-cov
 sim_debug = $(sim_dir)/$(sim_prefix)-$(MODEL_PACKAGE)-$(CONFIG)-debug
 PYTHON ?= python3
 WAVEFORM_FLAG=-v$(sim_out_name).vcd
+N_COV_WORDS=205 #6555 bits / 32 bits per word
 
 .PHONY: default debug
 default: $(sim)
@@ -143,7 +144,7 @@ top_and_harness_cov = $(model_dir_cov).top_and_harness.v
 top_and_harness_cov_reduced = $(model_dir_cov).top_and_harness.reduced.v
 
 $(top_and_harness_cov): $(chiptop) $(harness) coverage.tcl
-	CHIPTOP_INPUT=$(chiptop) HARNESS_INPUT=$(harness)  VERILOG_OUTPUT=$@ TOP_MODULE=TestHarness yosys -c coverage.tcl
+	CHIPTOP_INPUT=$(chiptop) HARNESS_INPUT=$(harness)  VERILOG_OUTPUT=$@ TOP_MODULE=TestHarness COV_TOP=ChipTop yosys -c coverage.tcl
 	
 $(top_and_harness_cov_reduced): $(top_and_harness_cov)
 	mkdir -p generated
@@ -155,11 +156,12 @@ $(top_and_harness_cov_reduced): $(top_and_harness_cov)
 $(model_mk_cov): $(top_and_harness_cov_reduced) $(src_no_top_and_harness) $(sim_common_files) $(EXTRA_SIM_REQS)
 	rm -rf $(model_dir_cov)
 	mkdir -p $(model_dir_cov)
-	$(VERILATOR)  $(VERILATOR_OPTS_COV) -DCOV_EN -o $(sim_cov) --trace -Mdir $(model_dir_cov) -CFLAGS "-include $(model_header_cov)"
+	$(VERILATOR)  $(VERILATOR_OPTS_COV) -CFLAGS "-DCOV_EN -DN_COV_WORDS=$(N_COV_WORDS)" -o $(sim_cov) --trace -Mdir $(model_dir_cov) -CFLAGS "-include $(model_header_cov)"
 	touch $@
 
-test:
-	echo $(top_and_harness)
+recompile:
+	$(VERILATOR)  $(VERILATOR_OPTS_COV) -CFLAGS "-DCOV_EN -DN_COV_WORDS=$(N_COV_WORDS)" -o $(sim_cov) --trace -Mdir $(model_dir_cov) -CFLAGS "-include $(model_header_cov)"
+
 
 #########################################################################################
 # invoke make to make verilator sim rules
